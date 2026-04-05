@@ -1,8 +1,37 @@
-<!DOCTYPE html><html lang="id">
+<!DOCTYPE html>
+<html lang="id">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Kas Masjid Firebase</title><script type="module">
+<title>Kas Masjid</title>
+
+<style>
+body { font-family: Arial; margin:0; background:#e8f5e9; }
+.header { background:#2e7d32; color:white; padding:15px; text-align:center; }
+.container { padding:15px; }
+.card { background:white; padding:15px; border-radius:15px; margin-bottom:15px; }
+
+.menu-card {
+  text-align:center;
+  font-size:18px;
+  font-weight:bold;
+  cursor:pointer;
+}
+.menu-card:hover { transform:scale(1.03); }
+
+input, select, button {
+  width:100%; padding:10px; margin-top:8px; border-radius:10px;
+}
+button { background:#2e7d32; color:white; border:none; }
+
+table { width:100%; border-collapse: collapse; font-size:13px; }
+th { background:#43a047; color:white; }
+th, td { padding:8px; border-bottom:1px solid #ddd; text-align:center; }
+
+.hidden { display:none; }
+</style>
+
+<script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-app.js";
 import { getFirestore, collection, addDoc, onSnapshot, deleteDoc, doc, updateDoc } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-firestore.js";
 
@@ -18,157 +47,287 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
-let data = [];
-let editId = null;
-let filterBulan = ""; // kosong = tampil semua
+let dataInfaq=[], dataDonatur=[], editId=null;
+let filterBulanAktif=new Date().toISOString().slice(0,7);
 
-function formatRupiah(angka) {
-  return angka.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
-}
+// NAVIGASI
+window.bukaMenu=function(menu){
+  history.pushState({}, "", "");
 
-function autoHari() {
-  const t = document.getElementById("tanggal").value;
-  if(!t) return;
-  const h = ["Minggu","Senin","Selasa","Rabu","Kamis","Jumat","Sabtu"];
-  document.getElementById("hari").value = h[new Date(t).getDay()];
-}
-window.autoHari = autoHari;
+  beranda.classList.add("hidden");
+  infaqPage.classList.add("hidden");
+  donaturPage.classList.add("hidden");
 
-function render() {
-  let html = "";
-  let masuk = 0, keluar = 0;
+  if(menu==="infaq"){
+    judul.innerText="Menu Infaq";
+    infaqPage.classList.remove("hidden");
+    filterBulan.value=filterBulanAktif;
+    renderInfaq();
+  }
 
-  let dataTampil = filterBulan
-    ? data.filter(d => d.tanggal.startsWith(filterBulan))
-    : data;
+  if(menu==="donatur"){
+    judul.innerText="Menu Donatur";
+    donaturPage.classList.remove("hidden");
+    filterBulanDonatur.value=filterBulanAktif;
+    renderDonatur();
+  }
+};
 
-  dataTampil.forEach(d => {
-    html += `<tr>
-<td>${d.tanggal}</td>
-<td>${d.hari}</td>
-<td>${d.jenis}</td>
-<td>${d.keterangan}</td>
-<td>Rp ${formatRupiah(d.jumlah)}</td>
-<td>
-<button onclick="editData('${d.id}')">✏️</button>
-<button onclick="hapusData('${d.id}')">🗑️</button>
-</td></tr>`;
+// BACK
+history.pushState(null,null,location.href);
+window.onpopstate=function(){
+  beranda.classList.remove("hidden");
+  infaqPage.classList.add("hidden");
+  donaturPage.classList.add("hidden");
+  judul.innerText="Aplikasi Kas Masjid";
+  history.pushState(null,null,location.href);
+};
 
-    if(d.jenis==='Pemasukan') masuk+=Number(d.jumlah);
-    else keluar+=Number(d.jumlah);
+// AUTO HARI
+window.autoHari=function(idHari,idTanggal){
+  let t=document.getElementById(idTanggal).value;
+  let h=["Minggu","Senin","Selasa","Rabu","Kamis","Jumat","Sabtu"];
+  document.getElementById(idHari).innerHTML=`<option>${h[new Date(t).getDay()]}</option>`;
+};
+
+// FORMAT
+function rupiah(x){ return Number(x||0).toLocaleString("id-ID"); }
+
+// DASHBOARD
+function hitungDashboard(){
+  let masuk=0, keluar=0;
+  dataInfaq.forEach(d=>{
+    let j=Number(d.jumlah||0);
+    if(d.jenis==="Pemasukan") masuk+=j; else keluar+=j;
   });
 
-  document.getElementById("tabelData").innerHTML = html;
-  document.getElementById("totalMasuk").innerText = formatRupiah(masuk);
-  document.getElementById("totalKeluar").innerText = formatRupiah(keluar);
-  document.getElementById("saldo").innerText = formatRupiah(masuk-keluar);
+  homeMasuk.innerText=rupiah(masuk);
+  homeKeluar.innerText=rupiah(keluar);
+  homeSaldo.innerText=rupiah(masuk-keluar);
+
+  let masukD=0, keluarD=0;
+  dataDonatur.forEach(d=>{
+    let j=Number(d.jumlah||0);
+    if(d.jenis==="Pemasukan") masukD+=j; else keluarD+=j;
+  });
+
+  homeMasukDonatur.innerText=rupiah(masukD);
+  homeKeluarDonatur.innerText=rupiah(keluarD);
+  homeSaldoDonatur.innerText=rupiah(masukD-keluarD);
 }
 
-function setFilterBulan(){
-  filterBulan = document.getElementById("filterBulan").value;
-  render();
-}
-window.setFilterBulan = setFilterBulan;
-
-function resetFilter(){
-  filterBulan = "";
-  document.getElementById("filterBulan").value = "";
-  render();
-}
-window.resetFilter = resetFilter;
-
-async function tambahData() {
-  let item = {
-    tanggal: document.getElementById("tanggal").value,
-    hari: document.getElementById("hari").value,
-    jenis: document.getElementById("jenis").value,
-    keterangan: document.getElementById("keterangan").value,
-    jumlah: document.getElementById("jumlah").value
+// SIMPAN
+window.simpan=async function(){
+  let item={
+    tanggal:tanggal.value,
+    hari:hari.value,
+    jenis:jenis.value,
+    keterangan:keterangan.value,
+    jumlah:Number(jumlah.value)
   };
 
-  if(!item.tanggal || !item.hari || !item.jumlah){
-    alert("Isi data dulu");
-    return;
+  if(editId){
+    await updateDoc(doc(db,"kasMasjid",editId),item);
+    editId=null;
+  }else{
+    await addDoc(collection(db,"kasMasjid"),item);
   }
+  reset();
+};
+
+window.simpanDonatur=async function(){
+  let item={
+    tanggal:tanggalDonatur.value,
+    hari:hariDonatur.value,
+    jenis:jenisDonatur.value,
+    keterangan:keteranganDonatur.value,
+    jumlah:Number(jumlahDonatur.value)
+  };
 
   if(editId){
-    await updateDoc(doc(db,"kasMasjid",editId), item);
-    editId = null;
-  } else {
-    await addDoc(collection(db,"kasMasjid"), item);
+    await updateDoc(doc(db,"donatur",editId),item);
+    editId=null;
+  }else{
+    await addDoc(collection(db,"donatur"),item);
   }
+  resetDonatur();
+};
 
-  document.getElementById("tanggal").value='';
-  document.getElementById("hari").value='';
-  document.getElementById("keterangan").value='';
-  document.getElementById("jumlah").value='';
-}
-window.tambahData = tambahData;
-
-function editData(id){
-  let d = data.find(x=>x.id===id);
-  document.getElementById("tanggal").value=d.tanggal;
-  document.getElementById("hari").value=d.hari;
-  document.getElementById("jenis").value=d.jenis;
-  document.getElementById("keterangan").value=d.keterangan;
-  document.getElementById("jumlah").value=d.jumlah;
+// EDIT
+window.editData=function(id){
+  let d=dataInfaq.find(x=>x.id===id);
+  tanggal.value=d.tanggal;
+  autoHari("hari","tanggal");
+  jenis.value=d.jenis;
+  keterangan.value=d.keterangan;
+  jumlah.value=d.jumlah;
   editId=id;
-}
-window.editData = editData;
+};
 
-async function hapusData(id){
-  await deleteDoc(doc(db,"kasMasjid",id));
-}
-window.hapusData = hapusData;
+window.editDonatur=function(id){
+  let d=dataDonatur.find(x=>x.id===id);
+  tanggalDonatur.value=d.tanggal;
+  autoHari("hariDonatur","tanggalDonatur");
+  jenisDonatur.value=d.jenis;
+  keteranganDonatur.value=d.keterangan;
+  jumlahDonatur.value=d.jumlah;
+  editId=id;
+};
 
-onSnapshot(collection(db, "kasMasjid"), (snap) => {
-  data = [];
-  snap.forEach(docu => data.push({ id: docu.id, ...docu.data() }));
-  render();
+// HAPUS
+window.hapusData=async function(id){
+  if(confirm("Hapus data?")){
+    await deleteDoc(doc(db,"kasMasjid",id));
+  }
+};
+
+window.hapusDonatur=async function(id){
+  if(confirm("Hapus data?")){
+    await deleteDoc(doc(db,"donatur",id));
+  }
+};
+
+// RESET
+function reset(){ tanggal.value=""; hari.innerHTML=""; keterangan.value=""; jumlah.value=""; }
+function resetDonatur(){ tanggalDonatur.value=""; hariDonatur.innerHTML=""; keteranganDonatur.value=""; jumlahDonatur.value=""; }
+
+// RENDER
+window.renderInfaq=function(){
+  let bulan=filterBulan.value||filterBulanAktif;
+  let tampil=dataInfaq.filter(d=>!bulan||d.tanggal.startsWith(bulan));
+  tampil.sort((a,b)=>a.tanggal.localeCompare(b.tanggal));
+
+  let html="",masuk=0,keluar=0;
+  tampil.forEach(d=>{
+    let j=Number(d.jumlah||0);
+    html+=`<tr>
+<td>${d.tanggal}</td><td>${d.hari}</td><td>${d.jenis}</td>
+<td>${d.keterangan}</td><td>Rp ${rupiah(j)}</td>
+<td><button onclick="editData('${d.id}')">✏️</button>
+<button onclick="hapusData('${d.id}')">🗑️</button></td></tr>`;
+    if(d.jenis==="Pemasukan") masuk+=j; else keluar+=j;
+  });
+
+  tabel.innerHTML=html;
+  masukEl.innerText=rupiah(masuk);
+  keluarEl.innerText=rupiah(keluar);
+  saldoEl.innerText=rupiah(masuk-keluar);
+};
+
+window.renderDonatur=function(){
+  let bulan=filterBulanDonatur.value||filterBulanAktif;
+  let tampil=dataDonatur.filter(d=>!bulan||d.tanggal.startsWith(bulan));
+  tampil.sort((a,b)=>a.tanggal.localeCompare(b.tanggal));
+
+  let html="",masuk=0,keluar=0;
+  tampil.forEach(d=>{
+    let j=Number(d.jumlah||0);
+    html+=`<tr>
+<td>${d.tanggal}</td><td>${d.hari}</td><td>${d.jenis}</td>
+<td>${d.keterangan}</td><td>Rp ${rupiah(j)}</td>
+<td><button onclick="editDonatur('${d.id}')">✏️</button>
+<button onclick="hapusDonatur('${d.id}')">🗑️</button></td></tr>`;
+    if(d.jenis==="Pemasukan") masuk+=j; else keluar+=j;
+  });
+
+  tabelDonatur.innerHTML=html;
+  masukDonatur.innerText=rupiah(masuk);
+  keluarDonatur.innerText=rupiah(keluar);
+  saldoDonatur.innerText=rupiah(masuk-keluar);
+};
+
+// FIREBASE
+onSnapshot(collection(db,"kasMasjid"),snap=>{
+  dataInfaq=[];
+  snap.forEach(d=>dataInfaq.push({id:d.id,...d.data()}));
+  renderInfaq();
+  hitungDashboard();
 });
 
-</script><style>
-body { font-family: Arial; margin:0; background:#e8f5e9; }
-.header { background:#2e7d32; color:white; padding:15px; text-align:center; }
-.container { padding:15px; }
-.card { background:white; padding:15px; border-radius:15px; margin-bottom:15px; }
-input, select, button { width:100%; padding:10px; margin-top:8px; border-radius:10px; }
-button { background:#2e7d32; color:white; border:none; }
-table { width:100%; border-collapse: collapse; font-size:13px; }
-th { background:#43a047; color:white; }
-th, td { padding:8px; border-bottom:1px solid #ddd; text-align:center; }
-</style></head>
-<body><div class="header">
+onSnapshot(collection(db,"donatur"),snap=>{
+  dataDonatur=[];
+  snap.forEach(d=>dataDonatur.push({id:d.id,...d.data()}));
+  renderDonatur();
+  hitungDashboard();
+});
+</script>
+
+</head>
+
+<body>
+
+<div class="header">
 <h2>Masjid Baiturrahman</h2>
-<p>Kas Masjid</p>
-</div><div class="container"><div class="card">
-<label>Filter Bulan:</label>
-<input type="month" id="filterBulan" onchange="setFilterBulan()">
-<button onclick="resetFilter()">Tampilkan Semua</button>
-</div><div class="card">
-<input type="date" id="tanggal" onchange="autoHari()">
-<select id="hari">
-<option value="">Pilih Hari</option>
-<option>Senin</option><option>Selasa</option><option>Rabu</option>
-<option>Kamis</option><option>Jumat</option><option>Sabtu</option><option>Minggu</option>
-</select>
-<select id="jenis">
-<option>Pemasukan</option>
-<option>Pengeluaran</option>
-</select>
-<input type="text" id="keterangan" placeholder="Keterangan">
-<input type="number" id="jumlah" placeholder="Jumlah">
-<button onclick="tambahData()">Simpan</button>
-</div><div class="card">
-<table>
-<thead>
-<tr><th>Tanggal</th><th>Hari</th><th>Jenis</th><th>Ket</th><th>Jumlah</th><th>Aksi</th></tr>
-</thead>
-<tbody id="tabelData"></tbody>
-</table>
-</div><div class="card">
-<p>Total Masuk: Rp <span id="totalMasuk">0</span></p>
-<p>Total Keluar: Rp <span id="totalKeluar">0</span></p>
-<p>Saldo: Rp <span id="saldo">0</span></p>
-</div></div></body>
+<p id="judul">Aplikasi Kas Masjid</p>
+</div>
+
+<div class="container">
+
+<!-- BERANDA -->
+<div id="beranda">
+
+<!-- MENU -->
+<div class="card menu-card" onclick="bukaMenu('infaq')">🕌 Menu Infaq</div>
+<div class="card menu-card" onclick="bukaMenu('donatur')">🏗️ Pembangunan Masjid</div>
+
+<!-- RINGKASAN DI BAWAH -->
+<div class="card">
+<h3>🕌 Ringkasan Infaq</h3>
+<p>💰 Masuk: Rp <span id="homeMasuk">0</span></p>
+<p>💸 Keluar: Rp <span id="homeKeluar">0</span></p>
+<p>📊 Saldo: Rp <span id="homeSaldo">0</span></p>
+</div>
+
+<div class="card">
+<h3>🤝 Ringkasan Pembangunan Masjid</h3>
+<p>💰 Masuk: Rp <span id="homeMasukDonatur">0</span></p>
+<p>💸 Keluar: Rp <span id="homeKeluarDonatur">0</span></p>
+<p>📊 Saldo: Rp <span id="homeSaldoDonatur">0</span></p>
+</div>
+
+</div>
+
+<!-- INFAQ -->
+<div id="infaqPage" class="hidden">
+<input type="month" id="filterBulan" onchange="renderInfaq()">
+<input type="date" id="tanggal" onchange="autoHari('hari','tanggal')">
+<select id="hari"></select>
+<select id="jenis"><option>Pemasukan</option><option>Pengeluaran</option></select>
+<input id="keterangan">
+<input id="jumlah" type="number" placeholder="Jumlah (Rp)">
+<button onclick="simpan()">Simpan</button>
+
+<table><tbody id="tabel"></tbody></table>
+
+<div class="card">
+<h3>Ringkasan</h3>
+<p>💰 Masuk: Rp <span id="masukEl"></span></p>
+<p>💸 Keluar: Rp <span id="keluarEl"></span></p>
+<p>📊 Saldo: Rp <span id="saldoEl"></span></p>
+</div>
+</div>
+
+<!-- DONATUR -->
+<div id="donaturPage" class="hidden">
+<input type="month" id="filterBulanDonatur" onchange="renderDonatur()">
+<input type="date" id="tanggalDonatur" onchange="autoHari('hariDonatur','tanggalDonatur')">
+<select id="hariDonatur"></select>
+<select id="jenisDonatur"><option>Pemasukan</option><option>Pengeluaran</option></select>
+<input id="keteranganDonatur">
+<input id="jumlahDonatur" type="number" placeholder="Jumlah (Rp)">
+<button onclick="simpanDonatur()">Simpan</button>
+
+<table><tbody id="tabelDonatur"></tbody></table>
+
+<div class="card">
+<h3>Ringkasan</h3>
+<p>💰 Masuk: Rp <span id="masukDonatur"></span></p>
+<p>💸 Keluar: Rp <span id="keluarDonatur"></span></p>
+<p>📊 Saldo: Rp <span id="saldoDonatur"></span></p>
+</div>
+</div>
+
+</div>
+
+</body>
 </html>

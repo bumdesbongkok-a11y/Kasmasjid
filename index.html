@@ -81,10 +81,8 @@ window.bukaMenu=function(menu){
 // HANDLE BACK BUTTON HP
 window.addEventListener('popstate', (event) => {
   if(!beranda.classList.contains('hidden')){
-    // di beranda → biarkan exit
     return;
   } else {
-    // kembali ke beranda
     beranda.classList.remove('hidden');
     infaqPage.classList.add('hidden');
     donaturPage.classList.add('hidden');
@@ -103,30 +101,49 @@ window.autoHari=function(idHari,idTanggal){
 // ===== FORMAT =====
 function rupiah(x){ return Number(x||0).toLocaleString("id-ID"); }
 
-// DASHBOARD
+// ===== DASHBOARD =====
 function hitungDashboard(){
-  let masuk=0, keluar=0;
+  let bulanAktif = filterBulanAktif;
+  let bulanIni = filterBulan.value || bulanAktif;
+  
+  // ---- INFAQ ----
+  let masukBulanIni=0, keluarBulanIni=0, saldoBulanLalu=0;
   dataInfaq.forEach(d=>{
     let j=Number(d.jumlah||0);
-    if(d.jenis==="Pemasukan") masuk+=j; else keluar+=j;
+    if(d.tanggal.startsWith(bulanIni)){
+      if(d.jenis==="Pemasukan") masukBulanIni+=j; else keluarBulanIni+=j;
+    }
+    if(d.tanggal < bulanIni+"-01"){
+      saldoBulanLalu += (d.jenis==="Pemasukan"?j:-j);
+    }
   });
 
-  homeMasuk.innerText=rupiah(masuk);
-  homeKeluar.innerText=rupiah(keluar);
-  homeSaldo.innerText=rupiah(masuk-keluar);
+  homeMasuk.innerText = rupiah(masukBulanIni);
+  homeKeluar.innerText = rupiah(keluarBulanIni);
+  homeSaldoBulanLalu.innerText = rupiah(saldoBulanLalu);
+  homeSisaSaldo.innerText = rupiah(saldoBulanLalu + masukBulanIni - keluarBulanIni);
+  homeTotalSaldo.innerText = rupiah(dataInfaq.reduce((sum,d)=>sum + (d.jenis==="Pemasukan"?Number(d.jumlah||0):-Number(d.jumlah||0)),0));
 
-  let masukD=0, keluarD=0;
+  // ---- DONATUR ----
+  let masukBulanIniD=0, keluarBulanIniD=0, saldoBulanLaluD=0;
   dataDonatur.forEach(d=>{
     let j=Number(d.jumlah||0);
-    if(d.jenis==="Pemasukan") masukD+=j; else keluarD+=j;
+    if(d.tanggal.startsWith(bulanIni)){
+      if(d.jenis==="Pemasukan") masukBulanIniD+=j; else keluarBulanIniD+=j;
+    }
+    if(d.tanggal < bulanIni+"-01"){
+      saldoBulanLaluD += (d.jenis==="Pemasukan"?j:-j);
+    }
   });
 
-  homeMasukDonatur.innerText=rupiah(masukD);
-  homeKeluarDonatur.innerText=rupiah(keluarD);
-  homeSaldoDonatur.innerText=rupiah(masukD-keluarD);
+  homeMasukDonatur.innerText = rupiah(masukBulanIniD);
+  homeKeluarDonatur.innerText = rupiah(keluarBulanIniD);
+  homeSaldoBulanLaluDonatur.innerText = rupiah(saldoBulanLaluD);
+  homeSisaSaldoDonatur.innerText = rupiah(saldoBulanLaluD + masukBulanIniD - keluarBulanIniD);
+  homeTotalSaldoDonatur.innerText = rupiah(dataDonatur.reduce((sum,d)=>sum + (d.jenis==="Pemasukan"?Number(d.jumlah||0):-Number(d.jumlah||0)),0));
 }
 
-// SIMPAN
+// ===== SIMPAN =====
 window.simpan=async function(){
   let item={
     tanggal:tanggal.value,
@@ -161,7 +178,7 @@ window.simpanDonatur=async function(){
   resetDonatur();
 };
 
-// EDIT & HAPUS
+// ===== EDIT & HAPUS =====
 window.editData=function(id){
   let d=dataInfaq.find(x=>x.id===id);
   tanggal.value=d.tanggal;
@@ -183,11 +200,11 @@ window.editDonatur=function(id){
 window.hapusData=async function(id){ if(confirm("Hapus data?")) await deleteDoc(doc(db,"kasMasjid",id)); };
 window.hapusDonatur=async function(id){ if(confirm("Hapus data?")) await deleteDoc(doc(db,"donatur",id)); };
 
-// RESET
+// ===== RESET =====
 function reset(){ tanggal.value=""; hari.innerHTML=""; keterangan.value=""; jumlah.value=""; }
 function resetDonatur(){ tanggalDonatur.value=""; hariDonatur.innerHTML=""; keteranganDonatur.value=""; jumlahDonatur.value=""; }
 
-// SHARE WA
+// ===== SHARE WA =====
 function namaBulan(bulan){
   const bln=["Januari","Februari","Maret","April","Mei","Juni","Juli","Agustus","September","Oktober","November","Desember"];
   let b=bulan.split("-")[1];
@@ -220,7 +237,7 @@ window.shareWADonatur=function(){
   window.open(`https://wa.me/?text=${encodeURIComponent(text)}`);
 };
 
-// RENDER & SORT TANGGAL ASC
+// ===== RENDER & SORT TANGGAL ASC =====
 window.renderInfaq=function(){
   let bulan=filterBulan.value||filterBulanAktif;
   let tampil=dataInfaq.filter(d=>d.tanggal.startsWith(bulan));
@@ -242,6 +259,7 @@ window.renderInfaq=function(){
   masukEl.innerText=rupiah(masuk);
   keluarEl.innerText=rupiah(keluar);
   saldoEl.innerText=rupiah(masuk-keluar);
+  hitungDashboard();
 };
 
 window.renderDonatur=function(){
@@ -265,21 +283,20 @@ window.renderDonatur=function(){
   masukDonatur.innerText=rupiah(masuk);
   keluarDonatur.innerText=rupiah(keluar);
   saldoDonatur.innerText=rupiah(masuk-keluar);
+  hitungDashboard();
 };
 
-// FIREBASE
+// ===== FIREBASE =====
 onSnapshot(collection(db,"kasMasjid"),snap=>{
   dataInfaq=[];
   snap.forEach(d=>dataInfaq.push({id:d.id,...d.data()}));
   renderInfaq();
-  hitungDashboard();
 });
 
 onSnapshot(collection(db,"donatur"),snap=>{
   dataDonatur=[];
   snap.forEach(d=>dataDonatur.push({id:d.id,...d.data()}));
   renderDonatur();
-  hitungDashboard();
 });
 </script>
 
@@ -300,16 +317,20 @@ onSnapshot(collection(db,"donatur"),snap=>{
 
 <div class="card">
 <h3>🕌 Ringkasan Infaq</h3>
-<p>💰 Masuk: Rp <span id="homeMasuk">0</span></p>
-<p>💸 Keluar: Rp <span id="homeKeluar">0</span></p>
-<p>📊 Saldo: Rp <span id="homeSaldo">0</span></p>
+<p>💰 Saldo Bulan Kemarin: Rp <span id="homeSaldoBulanLalu">0</span></p>
+<p>💰 Pemasukan Bulan ini: Rp <span id="homeMasuk">0</span></p>
+<p>💸 Pengeluaran Bulan ini: Rp <span id="homeKeluar">0</span></p>
+<p>📊 Sisa Saldo Bulan ini: Rp <span id="homeSisaSaldo">0</span></p>
+<p>💰 Total Saldo: Rp <span id="homeTotalSaldo">0</span></p>
 </div>
 
 <div class="card">
 <h3>🤝 Ringkasan Pembangunan Masjid</h3>
-<p>💰 Masuk: Rp <span id="homeMasukDonatur">0</span></p>
-<p>💸 Keluar: Rp <span id="homeKeluarDonatur">0</span></p>
-<p>📊 Saldo: Rp <span id="homeSaldoDonatur">0</span></p>
+<p>💰 Saldo Bulan Kemarin: Rp <span id="homeSaldoBulanLaluDonatur">0</span></p>
+<p>💰 Pemasukan Bulan ini: Rp <span id="homeMasukDonatur">0</span></p>
+<p>💸 Pengeluaran Bulan ini: Rp <span id="homeKeluarDonatur">0</span></p>
+<p>📊 Sisa Saldo Bulan ini: Rp <span id="homeSisaSaldoDonatur">0</span></p>
+<p>💰 Total Saldo: Rp <span id="homeTotalSaldoDonatur">0</span></p>
 </div>
 </div>
 
@@ -365,7 +386,7 @@ onSnapshot(collection(db,"donatur"),snap=>{
 <div class="card">
 <h3>Ringkasan</h3>
 <p>💰 Masuk: Rp <span id="masukDonatur"></span></p>
-<p>💸 Keluar: Rp <span id="keluarDonatur"></span></p>
+<p>💸 Keluar:<span id="keluarDonatur"></span></p>
 <p>📊 Saldo: Rp <span id="saldoDonatur"></span></p>
 <button onclick="shareWADonatur()">📤 Share WhatsApp</button>
 </div>

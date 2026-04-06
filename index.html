@@ -33,6 +33,13 @@ th, td { padding:8px; border-bottom:1px solid #ddd; text-align:center; }
 .expense { color:red; font-weight:bold; }
 
 .hidden { display:none; }
+
+/* Total saldo diperbesar dan bold */
+.total-saldo {
+  font-weight: bold;
+  font-size: 18px;
+  color: #2e7d32;
+}
 </style>
 
 <script type="module">
@@ -121,7 +128,7 @@ function hitungDashboard(){
   homeMasuk.innerText = rupiah(masukBulanIni);
   homeKeluar.innerText = rupiah(keluarBulanIni);
   homeSaldoBulanLalu.innerText = rupiah(saldoBulanLalu);
-  homeSisaSaldo.innerText = rupiah(saldoBulanLalu + masukBulanIni - keluarBulanIni);
+  homeSisaSaldo.innerText = rupiah(masukBulanIni - keluarBulanIni);
   homeTotalSaldo.innerText = rupiah(dataInfaq.reduce((sum,d)=>sum + (d.jenis==="Pemasukan"?Number(d.jumlah||0):-Number(d.jumlah||0)),0));
 
   // ---- DONATUR ----
@@ -139,7 +146,7 @@ function hitungDashboard(){
   homeMasukDonatur.innerText = rupiah(masukBulanIniD);
   homeKeluarDonatur.innerText = rupiah(keluarBulanIniD);
   homeSaldoBulanLaluDonatur.innerText = rupiah(saldoBulanLaluD);
-  homeSisaSaldoDonatur.innerText = rupiah(saldoBulanLaluD + masukBulanIniD - keluarBulanIniD);
+  homeSisaSaldoDonatur.innerText = rupiah(masukBulanIniD - keluarBulanIniD);
   homeTotalSaldoDonatur.innerText = rupiah(dataDonatur.reduce((sum,d)=>sum + (d.jenis==="Pemasukan"?Number(d.jumlah||0):-Number(d.jumlah||0)),0));
 }
 
@@ -259,6 +266,7 @@ window.renderInfaq=function(){
   masukEl.innerText=rupiah(masuk);
   keluarEl.innerText=rupiah(keluar);
   saldoEl.innerText=rupiah(masuk-keluar);
+  totalSaldoMenu.innerText=rupiah(masuk - keluar + Number(homeSaldoBulanLalu.innerText.replace(/\./g,'')));
   hitungDashboard();
 };
 
@@ -271,7 +279,7 @@ window.renderDonatur=function(){
     let j=Number(d.jumlah||0);
     html+=`<tr>
 <td>${d.tanggal}</td>
-<td>${d.hari}</td>
+<td>${d.hari==='undefined'?'':d.hari}</td>
 <td class="${d.jenis==='Pemasukan'?'income':'expense'}">${d.jenis}</td>
 <td>${d.keterangan}</td>
 <td class="${d.jenis==='Pemasukan'?'income':'expense'}">Rp ${rupiah(j)}</td>
@@ -283,6 +291,7 @@ window.renderDonatur=function(){
   masukDonatur.innerText=rupiah(masuk);
   keluarDonatur.innerText=rupiah(keluar);
   saldoDonatur.innerText=rupiah(masuk-keluar);
+  totalSaldoDonaturMenu.innerText=rupiah(masuk - keluar + Number(homeSaldoBulanLaluDonatur.innerText.replace(/\./g,'')));
   hitungDashboard();
 };
 
@@ -317,20 +326,20 @@ onSnapshot(collection(db,"donatur"),snap=>{
 
 <div class="card">
 <h3>🕌 Ringkasan Infaq</h3>
-<p>💰 Saldo Bulan Kemarin: Rp <span id="homeSaldoBulanLalu">0</span></p>
-<p>💰 Pemasukan Bulan ini: Rp <span id="homeMasuk">0</span></p>
-<p>💸 Pengeluaran Bulan ini: Rp <span id="homeKeluar">0</span></p>
-<p>📊 Sisa Saldo Bulan ini: Rp <span id="homeSisaSaldo">0</span></p>
-<p>💰 Total Saldo: Rp <span id="homeTotalSaldo">0</span></p>
+<p>💰 Saldo Bulan Kemarin: Rp <span id="homeSaldoBulanLalu" class="total-saldo">0</span></p>
+<p>💰 Pemasukan Bulan ini: <span class="income" id="homeMasuk">0</span></p>
+<p>💸 Pengeluaran Bulan ini: <span class="expense" id="homeKeluar">0</span></p>
+<p>📊 Sisa Saldo Bulan ini: Rp <span id="homeSisaSaldo" class="total-saldo">0</span></p>
+<p>💰 Total Saldo: Rp <span id="homeTotalSaldo" class="total-saldo">0</span></p>
 </div>
 
 <div class="card">
 <h3>🤝 Ringkasan Pembangunan Masjid</h3>
-<p>💰 Saldo Bulan Kemarin: Rp <span id="homeSaldoBulanLaluDonatur">0</span></p>
-<p>💰 Pemasukan Bulan ini: Rp <span id="homeMasukDonatur">0</span></p>
-<p>💸 Pengeluaran Bulan ini: Rp <span id="homeKeluarDonatur">0</span></p>
-<p>📊 Sisa Saldo Bulan ini: Rp <span id="homeSisaSaldoDonatur">0</span></p>
-<p>💰 Total Saldo: Rp <span id="homeTotalSaldoDonatur">0</span></p>
+<p>💰 Saldo Bulan Kemarin: Rp <span id="homeSaldoBulanLaluDonatur" class="total-saldo">0</span></p>
+<p>💰 Pemasukan Bulan ini: <span class="income" id="homeMasukDonatur">0</span></p>
+<p>💸 Pengeluaran Bulan ini: <span class="expense" id="homeKeluarDonatur">0</span></p>
+<p>📊 Sisa Saldo Bulan ini: Rp <span id="homeSisaSaldoDonatur" class="total-saldo">0</span></p>
+<p>💰 Total Saldo: Rp <span id="homeTotalSaldoDonatur" class="total-saldo">0</span></p>
 </div>
 </div>
 
@@ -356,20 +365,21 @@ onSnapshot(collection(db,"donatur"),snap=>{
 
 <div class="card">
 <h3>Ringkasan</h3>
-<p>💰 Masuk: Rp <span id="masukEl"></span></p>
-<p>💸 Keluar: Rp <span id="keluarEl"></span></p>
-<p>📊 Saldo: Rp <span id="saldoEl"></span></p>
+<p>💰 Saldo Bulan Kemarin: Rp <span id="saldoBulanLaluMenu" class="total-saldo">0</span></p>
+<p>💰 Masuk Bulan Ini: <span class="income" id="masukEl"></span></p>
+<p>💸 Keluar Bulan Ini: <span class="expense" id="keluarEl"></span></p>
+<p>📊 Saldo Bulan Ini: Rp <span id="saldoEl" class="total-saldo">0</span></p>
+<p>💰 Total Saldo: Rp <span id="totalSaldoMenu" class="total-saldo">0</span></p>
 <button onclick="shareWAInfaq()">📤 Share WhatsApp</button>
 </div>
 </div>
 
-<!-- DONATUR -->
+<!-- DONATUR / PEMBANGUNAN MASJID -->
 <div id="donaturPage" class="hidden">
 <input type="month" id="filterBulanDonatur" onchange="renderDonatur()">
 <input type="date" id="tanggalDonatur" onchange="autoHari('hariDonatur','tanggalDonatur')">
-<select id="hariDonatur"></select>
-<select id="jenisDonatur"><option>Pemasukan</option><option>Pengeluaran</option></select>
-<input id="keteranganDonatur" placeholder="pembangunan">
+<select id="hariDonatur<select id="jenisDonatur"><option>Pemasukan</option><option>Pengeluaran</option></select>
+<input id="keteranganDonatur" placeholder="contoh donatur pembangunan">
 <input id="jumlahDonatur" type="number" placeholder="Jumlah (Rp)">
 <button onclick="simpanDonatur()">Simpan</button>
 
@@ -384,14 +394,17 @@ onSnapshot(collection(db,"donatur"),snap=>{
 </table>
 
 <div class="card">
-<h3>Ringkasan</h3>
-<p>💰 Masuk: Rp <span id="masukDonatur"></span></p>
-<p>💸 Keluar:<span id="keluarDonatur"></span></p>
-<p>📊 Saldo: Rp <span id="saldoDonatur"></span></p>
+<h3>Ringkasan Pembangunan Masjid</h3>
+<p>💰 Saldo Bulan Kemarin: Rp <span id="saldoBulanLaluDonaturMenu" class="total-saldo">0</span></p>
+<p>💰 Masuk Bulan Ini: <span class="income" id="masukDonatur"></span></p>
+<p>💸 Keluar Bulan Ini: <span class="expense" id="keluarDonatur"></span></p>
+<p>📊 Saldo Bulan Ini: Rp <span id="saldoDonatur" class="total-saldo">0</span></p>
+<p>💰 Total Saldo: Rp <span id="totalSaldoDonaturMenu" class="total-saldo">0</span></p>
 <button onclick="shareWADonatur()">📤 Share WhatsApp</button>
 </div>
 </div>
 
-</div>
+</div> <!-- END CONTAINER -->
+
 </body>
 </html>

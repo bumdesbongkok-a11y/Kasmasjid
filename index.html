@@ -3,7 +3,12 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Kas Masjid</title>
+<title>Kas Masjid v1.0.1</title>
+
+<!-- ANTI CACHE -->
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 
 <style>
 body { font-family: Arial; margin:0; background:#e8f5e9; }
@@ -36,51 +41,43 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/12.11.0/fireba
 import { getFirestore, collection, addDoc, onSnapshot, deleteDoc, doc, updateDoc } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-firestore.js";
 
 const firebaseConfig = {
-  apiKey: "AIzaSyDLlDn9b5MqU66BkGAhIuoE3hBuTpgRS_o",
+  apiKey: "AIzaSy...",
   authDomain: "masjidbaiturahman.firebaseapp.com",
   projectId: "masjidbaiturahman",
-  storageBucket: "masjidbaiturahman.firebasestorage.app",
-  messagingSenderId: "135032335200",
-  appId: "1:135032335200:web:0c7bbf386f17c54826cc05"
 };
 
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
-let dataInfaq=[], dataDonatur=[], editId=null;
+let dataInfaq=[], dataDonatur=[];
+let editIdInfaq=null;
+let editIdDonatur=null;
+
 let filterBulanAktif=new Date().toISOString().slice(0,7);
+
+// AUTO BULAN
+window.onload=function(){
+  filterBulan.value=filterBulanAktif;
+  filterBulanDonatur.value=filterBulanAktif;
+};
 
 // NAVIGASI
 window.bukaMenu=function(menu){
-  history.pushState({}, "", "");
-
   beranda.classList.add("hidden");
   infaqPage.classList.add("hidden");
   donaturPage.classList.add("hidden");
 
   if(menu==="infaq"){
-    judul.innerText="Menu Infaq";
+    judul.innerText=" Infaq";
     infaqPage.classList.remove("hidden");
-    filterBulan.value=filterBulanAktif;
     renderInfaq();
   }
 
   if(menu==="donatur"){
-    judul.innerText="Menu Donatur";
+    judul.innerText=" Pembangunan Masjid";
     donaturPage.classList.remove("hidden");
-    filterBulanDonatur.value=filterBulanAktif;
     renderDonatur();
   }
-};
-
-// BACK
-history.pushState(null,null,location.href);
-window.onpopstate=function(){
-  beranda.classList.remove("hidden");
-  infaqPage.classList.add("hidden");
-  donaturPage.classList.add("hidden");
-  judul.innerText="Aplikasi Kas Masjid";
-  history.pushState(null,null,location.href);
 };
 
 // AUTO HARI
@@ -90,7 +87,6 @@ window.autoHari=function(idHari,idTanggal){
   document.getElementById(idHari).innerHTML=`<option>${h[new Date(t).getDay()]}</option>`;
 };
 
-// FORMAT
 function rupiah(x){ return Number(x||0).toLocaleString("id-ID"); }
 
 // DASHBOARD
@@ -126,9 +122,9 @@ window.simpan=async function(){
     jumlah:Number(jumlah.value)
   };
 
-  if(editId){
-    await updateDoc(doc(db,"kasMasjid",editId),item);
-    editId=null;
+  if(editIdInfaq){
+    await updateDoc(doc(db,"kasMasjid",editIdInfaq),item);
+    editIdInfaq=null;
   }else{
     await addDoc(collection(db,"kasMasjid"),item);
   }
@@ -144,9 +140,9 @@ window.simpanDonatur=async function(){
     jumlah:Number(jumlahDonatur.value)
   };
 
-  if(editId){
-    await updateDoc(doc(db,"donatur",editId),item);
-    editId=null;
+  if(editIdDonatur){
+    await updateDoc(doc(db,"donatur",editIdDonatur),item);
+    editIdDonatur=null;
   }else{
     await addDoc(collection(db,"donatur"),item);
   }
@@ -161,7 +157,7 @@ window.editData=function(id){
   jenis.value=d.jenis;
   keterangan.value=d.keterangan;
   jumlah.value=d.jumlah;
-  editId=id;
+  editIdInfaq=id;
 };
 
 window.editDonatur=function(id){
@@ -171,7 +167,7 @@ window.editDonatur=function(id){
   jenisDonatur.value=d.jenis;
   keteranganDonatur.value=d.keterangan;
   jumlahDonatur.value=d.jumlah;
-  editId=id;
+  editIdDonatur=id;
 };
 
 // HAPUS
@@ -191,11 +187,60 @@ window.hapusDonatur=async function(id){
 function reset(){ tanggal.value=""; hari.innerHTML=""; keterangan.value=""; jumlah.value=""; }
 function resetDonatur(){ tanggalDonatur.value=""; hariDonatur.innerHTML=""; keteranganDonatur.value=""; jumlahDonatur.value=""; }
 
+// FORMAT BULAN
+function namaBulan(bulan){
+  const bln=["Januari","Februari","Maret","April","Mei","Juni","Juli","Agustus","September","Oktober","November","Desember"];
+  let b=bulan.split("-")[1];
+  return bln[Number(b)-1]+" "+bulan.split("-")[0];
+}
+
+// SHARE WA
+window.shareWAInfaq=function(){
+  let bulan=filterBulan.value||filterBulanAktif;
+  let data=dataInfaq.filter(d=>d.tanggal.startsWith(bulan));
+
+  let masuk=0, keluar=0;
+  let text=`🕌 *LAPORAN INFAQ MASJID*\n📅 ${namaBulan(bulan)}\n\n`;
+
+  data.forEach(d=>{
+    let j=Number(d.jumlah||0);
+    text+=`${d.tanggal} | ${d.jenis} | Rp ${rupiah(j)}\n`;
+    if(d.jenis==="Pemasukan") masuk+=j; else keluar+=j;
+  });
+
+  text+=`\n----------------------\n`;
+  text+=`💰 Masuk : Rp ${rupiah(masuk)}\n`;
+  text+=`💸 Keluar: Rp ${rupiah(keluar)}\n`;
+  text+=`📊 Saldo : Rp ${rupiah(masuk-keluar)}\n`;
+
+  window.open(`https://wa.me/?text=${encodeURIComponent(text)}`);
+};
+
+window.shareWADonatur=function(){
+  let bulan=filterBulanDonatur.value||filterBulanAktif;
+  let data=dataDonatur.filter(d=>d.tanggal.startsWith(bulan));
+
+  let masuk=0, keluar=0;
+  let text=`🏗️ *LAPORAN PEMBANGUNAN MASJID*\n📅 ${namaBulan(bulan)}\n\n`;
+
+  data.forEach(d=>{
+    let j=Number(d.jumlah||0);
+    text+=`${d.tanggal} | ${d.jenis} | Rp ${rupiah(j)}\n`;
+    if(d.jenis==="Pemasukan") masuk+=j; else keluar+=j;
+  });
+
+  text+=`\n----------------------\n`;
+  text+=`💰 Masuk : Rp ${rupiah(masuk)}\n`;
+  text+=`💸 Keluar: Rp ${rupiah(keluar)}\n`;
+  text+=`📊 Saldo : Rp ${rupiah(masuk-keluar)}\n`;
+
+  window.open(`https://wa.me/?text=${encodeURIComponent(text)}`);
+};
+
 // RENDER
 window.renderInfaq=function(){
   let bulan=filterBulan.value||filterBulanAktif;
-  let tampil=dataInfaq.filter(d=>!bulan||d.tanggal.startsWith(bulan));
-  tampil.sort((a,b)=>a.tanggal.localeCompare(b.tanggal));
+  let tampil=dataInfaq.filter(d=>d.tanggal.startsWith(bulan));
 
   let html="",masuk=0,keluar=0;
   tampil.forEach(d=>{
@@ -216,8 +261,7 @@ window.renderInfaq=function(){
 
 window.renderDonatur=function(){
   let bulan=filterBulanDonatur.value||filterBulanAktif;
-  let tampil=dataDonatur.filter(d=>!bulan||d.tanggal.startsWith(bulan));
-  tampil.sort((a,b)=>a.tanggal.localeCompare(b.tanggal));
+  let tampil=dataDonatur.filter(d=>d.tanggal.startsWith(bulan));
 
   let html="",masuk=0,keluar=0;
   tampil.forEach(d=>{
@@ -250,6 +294,20 @@ onSnapshot(collection(db,"donatur"),snap=>{
   renderDonatur();
   hitungDashboard();
 });
+
+// AUTO UPDATE GITHUB
+setInterval(()=>{
+  fetch(location.href,{cache:"no-store"})
+    .then(res=>res.text())
+    .then(html=>{
+      if(!window.lastHTML){
+        window.lastHTML=html;
+      }else if(window.lastHTML!==html){
+        location.reload();
+      }
+    });
+},5000);
+
 </script>
 
 </head>
@@ -263,14 +321,10 @@ onSnapshot(collection(db,"donatur"),snap=>{
 
 <div class="container">
 
-<!-- BERANDA -->
 <div id="beranda">
-
-<!-- MENU -->
 <div class="card menu-card" onclick="bukaMenu('infaq')">🕌 Menu Infaq</div>
 <div class="card menu-card" onclick="bukaMenu('donatur')">🏗️ Pembangunan Masjid</div>
 
-<!-- RINGKASAN DI BAWAH -->
 <div class="card">
 <h3>🕌 Ringkasan Infaq</h3>
 <p>💰 Masuk: Rp <span id="homeMasuk">0</span></p>
@@ -284,7 +338,6 @@ onSnapshot(collection(db,"donatur"),snap=>{
 <p>💸 Keluar: Rp <span id="homeKeluarDonatur">0</span></p>
 <p>📊 Saldo: Rp <span id="homeSaldoDonatur">0</span></p>
 </div>
-
 </div>
 
 <!-- INFAQ -->
@@ -293,17 +346,26 @@ onSnapshot(collection(db,"donatur"),snap=>{
 <input type="date" id="tanggal" onchange="autoHari('hari','tanggal')">
 <select id="hari"></select>
 <select id="jenis"><option>Pemasukan</option><option>Pengeluaran</option></select>
-<input id="keterangan">
+<input id="keterangan" placeholder="contoh infaq jumat">
 <input id="jumlah" type="number" placeholder="Jumlah (Rp)">
 <button onclick="simpan()">Simpan</button>
 
-<table><tbody id="tabel"></tbody></table>
+<table>
+<thead>
+<tr>
+<th>Tanggal</th><th>Hari</th><th>Jenis</th>
+<th>Keterangan</th><th>Jumlah</th><th>Aksi</th>
+</tr>
+</thead>
+<tbody id="tabel"></tbody>
+</table>
 
 <div class="card">
 <h3>Ringkasan</h3>
 <p>💰 Masuk: Rp <span id="masukEl"></span></p>
 <p>💸 Keluar: Rp <span id="keluarEl"></span></p>
 <p>📊 Saldo: Rp <span id="saldoEl"></span></p>
+<button onclick="shareWAInfaq()">📤 Share WhatsApp</button>
 </div>
 </div>
 
@@ -313,17 +375,26 @@ onSnapshot(collection(db,"donatur"),snap=>{
 <input type="date" id="tanggalDonatur" onchange="autoHari('hariDonatur','tanggalDonatur')">
 <select id="hariDonatur"></select>
 <select id="jenisDonatur"><option>Pemasukan</option><option>Pengeluaran</option></select>
-<input id="keteranganDonatur">
+<input id="keteranganDonatur" placeholder="pembangunan">
 <input id="jumlahDonatur" type="number" placeholder="Jumlah (Rp)">
 <button onclick="simpanDonatur()">Simpan</button>
 
-<table><tbody id="tabelDonatur"></tbody></table>
+<table>
+<thead>
+<tr>
+<th>Tanggal</th><th>Hari</th><th>Jenis</th>
+<th>Keterangan</th><th>Jumlah</th><th>Aksi</th>
+</tr>
+</thead>
+<tbody id="tabelDonatur"></tbody>
+</table>
 
 <div class="card">
 <h3>Ringkasan</h3>
 <p>💰 Masuk: Rp <span id="masukDonatur"></span></p>
 <p>💸 Keluar: Rp <span id="keluarDonatur"></span></p>
 <p>📊 Saldo: Rp <span id="saldoDonatur"></span></p>
+<button onclick="shareWADonatur()">📤 Share WhatsApp</button>
 </div>
 </div>
 

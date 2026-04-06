@@ -3,12 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Kas Masjid v1.0.1</title>
-
-<!-- ANTI CACHE -->
-<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
-<meta http-equiv="Pragma" content="no-cache">
-<meta http-equiv="Expires" content="0">
+<title>Kas Masjid</title>
 
 <style>
 body { font-family: Arial; margin:0; background:#e8f5e9; }
@@ -26,12 +21,16 @@ body { font-family: Arial; margin:0; background:#e8f5e9; }
 
 input, select, button {
   width:100%; padding:10px; margin-top:8px; border-radius:10px;
+  box-sizing: border-box;
 }
-button { background:#2e7d32; color:white; border:none; }
+button { background:#2e7d32; color:white; border:none; cursor:pointer; }
 
 table { width:100%; border-collapse: collapse; font-size:13px; }
 th { background:#43a047; color:white; }
 th, td { padding:8px; border-bottom:1px solid #ddd; text-align:center; }
+
+.income { color:green; font-weight:bold; }
+.expense { color:red; font-weight:bold; }
 
 .hidden { display:none; }
 </style>
@@ -50,18 +49,17 @@ const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
 let dataInfaq=[], dataDonatur=[];
-let editIdInfaq=null;
-let editIdDonatur=null;
-
-let filterBulanAktif=new Date().toISOString().slice(0,7);
+let editIdInfaq=null, editIdDonatur=null;
+let filterBulanAktif = new Date().toISOString().slice(0,7);
 
 // AUTO BULAN
 window.onload=function(){
   filterBulan.value=filterBulanAktif;
   filterBulanDonatur.value=filterBulanAktif;
+  history.replaceState({page:'beranda'}, '', '');
 };
 
-// NAVIGASI
+// ===== NAVIGASI =====
 window.bukaMenu=function(menu){
   beranda.classList.add("hidden");
   infaqPage.classList.add("hidden");
@@ -72,21 +70,37 @@ window.bukaMenu=function(menu){
     infaqPage.classList.remove("hidden");
     renderInfaq();
   }
-
   if(menu==="donatur"){
     judul.innerText=" Pembangunan Masjid";
     donaturPage.classList.remove("hidden");
     renderDonatur();
   }
+  history.pushState({page:menu}, '', '');
 };
 
-// AUTO HARI
+// HANDLE BACK BUTTON HP
+window.addEventListener('popstate', (event) => {
+  if(!beranda.classList.contains('hidden')){
+    // di beranda → biarkan exit
+    return;
+  } else {
+    // kembali ke beranda
+    beranda.classList.remove('hidden');
+    infaqPage.classList.add('hidden');
+    donaturPage.classList.add('hidden');
+    judul.innerText = "Aplikasi Kas Masjid";
+    history.pushState({page:'beranda'}, '', '');
+  }
+});
+
+// ===== AUTO HARI =====
 window.autoHari=function(idHari,idTanggal){
   let t=document.getElementById(idTanggal).value;
   let h=["Minggu","Senin","Selasa","Rabu","Kamis","Jumat","Sabtu"];
   document.getElementById(idHari).innerHTML=`<option>${h[new Date(t).getDay()]}</option>`;
 };
 
+// ===== FORMAT =====
 function rupiah(x){ return Number(x||0).toLocaleString("id-ID"); }
 
 // DASHBOARD
@@ -121,7 +135,6 @@ window.simpan=async function(){
     keterangan:keterangan.value,
     jumlah:Number(jumlah.value)
   };
-
   if(editIdInfaq){
     await updateDoc(doc(db,"kasMasjid",editIdInfaq),item);
     editIdInfaq=null;
@@ -139,7 +152,6 @@ window.simpanDonatur=async function(){
     keterangan:keteranganDonatur.value,
     jumlah:Number(jumlahDonatur.value)
   };
-
   if(editIdDonatur){
     await updateDoc(doc(db,"donatur",editIdDonatur),item);
     editIdDonatur=null;
@@ -149,7 +161,7 @@ window.simpanDonatur=async function(){
   resetDonatur();
 };
 
-// EDIT
+// EDIT & HAPUS
 window.editData=function(id){
   let d=dataInfaq.find(x=>x.id===id);
   tanggal.value=d.tanggal;
@@ -159,7 +171,6 @@ window.editData=function(id){
   jumlah.value=d.jumlah;
   editIdInfaq=id;
 };
-
 window.editDonatur=function(id){
   let d=dataDonatur.find(x=>x.id===id);
   tanggalDonatur.value=d.tanggal;
@@ -169,90 +180,64 @@ window.editDonatur=function(id){
   jumlahDonatur.value=d.jumlah;
   editIdDonatur=id;
 };
-
-// HAPUS
-window.hapusData=async function(id){
-  if(confirm("Hapus data?")){
-    await deleteDoc(doc(db,"kasMasjid",id));
-  }
-};
-
-window.hapusDonatur=async function(id){
-  if(confirm("Hapus data?")){
-    await deleteDoc(doc(db,"donatur",id));
-  }
-};
+window.hapusData=async function(id){ if(confirm("Hapus data?")) await deleteDoc(doc(db,"kasMasjid",id)); };
+window.hapusDonatur=async function(id){ if(confirm("Hapus data?")) await deleteDoc(doc(db,"donatur",id)); };
 
 // RESET
 function reset(){ tanggal.value=""; hari.innerHTML=""; keterangan.value=""; jumlah.value=""; }
 function resetDonatur(){ tanggalDonatur.value=""; hariDonatur.innerHTML=""; keteranganDonatur.value=""; jumlahDonatur.value=""; }
 
-// FORMAT BULAN
+// SHARE WA
 function namaBulan(bulan){
   const bln=["Januari","Februari","Maret","April","Mei","Juni","Juli","Agustus","September","Oktober","November","Desember"];
   let b=bulan.split("-")[1];
   return bln[Number(b)-1]+" "+bulan.split("-")[0];
 }
 
-// SHARE WA
 window.shareWAInfaq=function(){
   let bulan=filterBulan.value||filterBulanAktif;
   let data=dataInfaq.filter(d=>d.tanggal.startsWith(bulan));
-
-  let masuk=0, keluar=0;
-  let text=`🕌 *LAPORAN INFAQ MASJID*\n📅 ${namaBulan(bulan)}\n\n`;
-
+  let masuk=0, keluar=0, text=`🕌 *LAPORAN INFAQ MASJID*\n📅 ${namaBulan(bulan)}\n\n`;
   data.forEach(d=>{
     let j=Number(d.jumlah||0);
     text+=`${d.tanggal} | ${d.jenis} | Rp ${rupiah(j)}\n`;
     if(d.jenis==="Pemasukan") masuk+=j; else keluar+=j;
   });
-
-  text+=`\n----------------------\n`;
-  text+=`💰 Masuk : Rp ${rupiah(masuk)}\n`;
-  text+=`💸 Keluar: Rp ${rupiah(keluar)}\n`;
-  text+=`📊 Saldo : Rp ${rupiah(masuk-keluar)}\n`;
-
+  text+=`\n----------------------\n💰 Masuk : Rp ${rupiah(masuk)}\n💸 Keluar: Rp ${rupiah(keluar)}\n📊 Saldo : Rp ${rupiah(masuk-keluar)}\n`;
   window.open(`https://wa.me/?text=${encodeURIComponent(text)}`);
 };
 
 window.shareWADonatur=function(){
   let bulan=filterBulanDonatur.value||filterBulanAktif;
   let data=dataDonatur.filter(d=>d.tanggal.startsWith(bulan));
-
-  let masuk=0, keluar=0;
-  let text=`🏗️ *LAPORAN PEMBANGUNAN MASJID*\n📅 ${namaBulan(bulan)}\n\n`;
-
+  let masuk=0, keluar=0, text=`🏗️ *LAPORAN PEMBANGUNAN MASJID*\n📅 ${namaBulan(bulan)}\n\n`;
   data.forEach(d=>{
     let j=Number(d.jumlah||0);
     text+=`${d.tanggal} | ${d.jenis} | Rp ${rupiah(j)}\n`;
     if(d.jenis==="Pemasukan") masuk+=j; else keluar+=j;
   });
-
-  text+=`\n----------------------\n`;
-  text+=`💰 Masuk : Rp ${rupiah(masuk)}\n`;
-  text+=`💸 Keluar: Rp ${rupiah(keluar)}\n`;
-  text+=`📊 Saldo : Rp ${rupiah(masuk-keluar)}\n`;
-
+  text+=`\n----------------------\n💰 Masuk : Rp ${rupiah(masuk)}\n💸 Keluar: Rp ${rupiah(keluar)}\n📊 Saldo : Rp ${rupiah(masuk-keluar)}\n`;
   window.open(`https://wa.me/?text=${encodeURIComponent(text)}`);
 };
 
-// RENDER
+// RENDER & SORT TANGGAL ASC
 window.renderInfaq=function(){
   let bulan=filterBulan.value||filterBulanAktif;
   let tampil=dataInfaq.filter(d=>d.tanggal.startsWith(bulan));
-
+  tampil.sort((a,b)=>a.tanggal.localeCompare(b.tanggal));
   let html="",masuk=0,keluar=0;
   tampil.forEach(d=>{
     let j=Number(d.jumlah||0);
     html+=`<tr>
-<td>${d.tanggal}</td><td>${d.hari}</td><td>${d.jenis}</td>
-<td>${d.keterangan}</td><td>Rp ${rupiah(j)}</td>
+<td>${d.tanggal}</td>
+<td>${d.hari}</td>
+<td class="${d.jenis==='Pemasukan'?'income':'expense'}">${d.jenis}</td>
+<td>${d.keterangan}</td>
+<td class="${d.jenis==='Pemasukan'?'income':'expense'}">Rp ${rupiah(j)}</td>
 <td><button onclick="editData('${d.id}')">✏️</button>
 <button onclick="hapusData('${d.id}')">🗑️</button></td></tr>`;
     if(d.jenis==="Pemasukan") masuk+=j; else keluar+=j;
   });
-
   tabel.innerHTML=html;
   masukEl.innerText=rupiah(masuk);
   keluarEl.innerText=rupiah(keluar);
@@ -262,18 +247,20 @@ window.renderInfaq=function(){
 window.renderDonatur=function(){
   let bulan=filterBulanDonatur.value||filterBulanAktif;
   let tampil=dataDonatur.filter(d=>d.tanggal.startsWith(bulan));
-
+  tampil.sort((a,b)=>a.tanggal.localeCompare(b.tanggal));
   let html="",masuk=0,keluar=0;
   tampil.forEach(d=>{
     let j=Number(d.jumlah||0);
     html+=`<tr>
-<td>${d.tanggal}</td><td>${d.hari}</td><td>${d.jenis}</td>
-<td>${d.keterangan}</td><td>Rp ${rupiah(j)}</td>
+<td>${d.tanggal}</td>
+<td>${d.hari}</td>
+<td class="${d.jenis==='Pemasukan'?'income':'expense'}">${d.jenis}</td>
+<td>${d.keterangan}</td>
+<td class="${d.jenis==='Pemasukan'?'income':'expense'}">Rp ${rupiah(j)}</td>
 <td><button onclick="editDonatur('${d.id}')">✏️</button>
 <button onclick="hapusDonatur('${d.id}')">🗑️</button></td></tr>`;
     if(d.jenis==="Pemasukan") masuk+=j; else keluar+=j;
   });
-
   tabelDonatur.innerHTML=html;
   masukDonatur.innerText=rupiah(masuk);
   keluarDonatur.innerText=rupiah(keluar);
@@ -294,24 +281,9 @@ onSnapshot(collection(db,"donatur"),snap=>{
   renderDonatur();
   hitungDashboard();
 });
-
-// AUTO UPDATE GITHUB
-setInterval(()=>{
-  fetch(location.href,{cache:"no-store"})
-    .then(res=>res.text())
-    .then(html=>{
-      if(!window.lastHTML){
-        window.lastHTML=html;
-      }else if(window.lastHTML!==html){
-        location.reload();
-      }
-    });
-},5000);
-
 </script>
 
 </head>
-
 <body>
 
 <div class="header">
@@ -321,6 +293,7 @@ setInterval(()=>{
 
 <div class="container">
 
+<!-- BERANDA -->
 <div id="beranda">
 <div class="card menu-card" onclick="bukaMenu('infaq')">🕌 Menu Infaq</div>
 <div class="card menu-card" onclick="bukaMenu('donatur')">🏗️ Pembangunan Masjid</div>
@@ -399,6 +372,5 @@ setInterval(()=>{
 </div>
 
 </div>
-
 </body>
 </html>

@@ -37,6 +37,13 @@ th, td { padding:8px; border-bottom:1px solid #ddd; text-align:center; }
 }
 </style>
 
+
+<!-- Library untuk ekspor Excel dan PDF -->
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.2/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.4/jspdf.plugin.autotable.min.js"></script>
+
+
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-app.js";
 import { getFirestore, collection, addDoc, onSnapshot, deleteDoc, doc, updateDoc } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-firestore.js";
@@ -304,6 +311,182 @@ window.renderDonatur=function(){
   hitungDashboard();
 };
 
+
+/* ===== FITUR EKSPOR LAPORAN ===== */
+
+function ambilDataLaporan(tipe) {
+  const isInfaq = tipe === "infaq";
+  const bulan = (
+    isInfaq ? filterBulan.value : filterBulanDonatur.value
+  ) || filterBulanAktif;
+
+  const sumber = isInfaq ? dataInfaq : dataDonatur;
+
+  const transaksi = sumber
+    .filter(d => d.tanggal && d.tanggal.startsWith(bulan))
+    .sort((a, b) => a.tanggal.localeCompare(b.tanggal));
+
+  let masuk = 0;
+  let keluar = 0;
+
+  transaksi.forEach(d => {
+    const jumlah = Number(d.jumlah || 0);
+    if (d.jenis === "Pemasukan") masuk += jumlah;
+    else keluar += jumlah;
+  });
+
+  // Saldo transaksi sebelum bulan yang dipilih
+  const saldoSebelumnya = sumber.reduce((total, d) => {
+    if (d.tanggal && d.tanggal < bulan + "-01") {
+      const jumlah = Number(d.jumlah || 0);
+      return total + (
+        d.jenis === "Pemasukan" ? jumlah : -jumlah
+      );
+    }
+    return total;
+  }, 0);
+
+  return {
+    bulan,
+    transaksi,
+    masuk,
+    keluar,
+    saldoSebelumnya,
+    saldoAkhir: saldoSebelumnya + masuk - keluar,
+    nama: isInfaq
+      ? "LAPORAN KEUANGAN INFAQ MASJID"
+      : "LAPORAN PEMBANGUNAN MASJID"
+  };
+}
+
+function formatRupiah(nilai) {
+  return "Rp " + Number(nilai || 0).toLocaleString("id-ID");
+}
+
+// EKSPOR EXCEL
+window.eksporExcel = function(tipe) {
+  if (!window.XLSX) {
+    alert("Library Excel belum berhasil dimuat.");
+    return;
+  }
+
+  const r = ambilDataLaporan(tipe);
+
+  const baris = r.transaksi.map((d, i) => ({
+    No: i + 1,
+    Tanggal: d.tanggal,
+    Hari: d.hari || "",
+    Jenis: d.jenis,
+    Keterangan: d.keterangan || "",
+    Jumlah: Number(d.jumlah || 0)
+  }));
+
+  baris.push({});
+  baris.push({
+    Keterangan: "Saldo Bulan Sebelumnya",
+    Jumlah: r.saldoSebelumnya
+  });
+  baris.push({
+    Keterangan: "Total Pemasukan",
+    Jumlah: r.masuk
+  });
+  baris.push({
+    Keterangan: "Total Pengeluaran",
+    Jumlah: r.keluar
+  });
+  baris.push({
+    Keterangan: "Saldo Akhir",
+    Jumlah: r.saldoAkhir
+  });
+
+  const ws = XLSX.utils.json_to_sheet(baris);
+  ws["!cols"] = [
+    { wch: 6 },
+    { wch: 14 },
+    { wch: 12 },
+    { wch: 16 },
+    { wch: 32 },
+    { wch: 20 }
+  ];
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Laporan");
+
+  XLSX.writeFile(
+    wb,
+    `Laporan_${tipe}_${r.bulan}.xlsx`
+  );
+};
+
+// EKSPOR PDF
+window.eksporPDF = function(tipe) {
+  if (!window.jspdf || !window.jspdf.jsPDF) {
+    alert("Library PDF belum berhasil dimuat.");
+    return;
+  }
+
+  const r = ambilDataLaporan(tipe);
+  const { jsPDF } = window.jspdf;
+  const pdf = new jsPDF();
+
+  pdf.setFontSize(15);
+  pdf.text("MASJID BAITURRAHMAN", 14, 16);
+
+  pdf.setFontSize(11);
+  pdf.text(r.nama, 14, 24);
+  pdf.text("Periode: " + r.bulan, 14, 31);
+
+  const baris = r.transaksi.map((d, i) => [
+    i + 1,
+    d.tanggal,
+    d.hari || "-",
+    d.jenis,
+    d.keterangan || "-",
+    formatRupiah(d.jumlah)
+  ]);
+
+  pdf.autoTable({
+    startY: 38,
+    head: [[
+      "No", "Tanggal", "Hari",
+      "Jenis", "Keterangan", "Jumlah"
+    ]],
+    body: baris,
+    styles: { fontSize: 8 },
+    headStyles: { fillColor: [46, 125, 50] }
+  });
+
+  let y = pdf.lastAutoTable.finalY + 10;
+
+  if (y > 250) {
+    pdf.addPage();
+    y = 20;
+  }
+
+  pdf.setFontSize(10);
+  pdf.text(
+    "Saldo Bulan Sebelumnya: " +
+      formatRupiah(r.saldoSebelumnya), 14, y
+  );
+  pdf.text(
+    "Total Pemasukan: " + formatRupiah(r.masuk),
+    14, y + 7
+  );
+  pdf.text(
+    "Total Pengeluaran: " + formatRupiah(r.keluar),
+    14, y + 14
+  );
+
+  pdf.setFontSize(12);
+  pdf.text(
+    "Saldo Akhir: " + formatRupiah(r.saldoAkhir),
+    14, y + 24
+  );
+
+  pdf.save(`Laporan_${tipe}_${r.bulan}.pdf`);
+};
+
+
 // ===== FIREBASE =====
 onSnapshot(collection(db,"kasMasjid"),snap=>{
   dataInfaq=[];
@@ -380,6 +563,19 @@ onSnapshot(collection(db,"donatur"),snap=>{
 <p>📊 Saldo Bulan Ini: Rp <span id="saldoEl" class="total-saldo">0</span></p>
 <p>💰 Total Saldo: Rp <span id="totalSaldoMenu" class="total-saldo">0</span></p>
 <button onclick="shareWAInfaq()">📤 Share WA</button>
+
+<button onclick="eksporPDF('infaq')">
+  📄 Ekspor PDF
+</button>
+
+<button onclick="eksporExcel('infaq')">
+  📊 Ekspor Excel
+</button>
+
+<button onclick="shareWAInfaq()">
+  📤 Share WA
+</button>
+
 <button onclick="bukaMenu('beranda')">🏠 Kembali</button>
 </div>
 </div>
@@ -412,6 +608,19 @@ onSnapshot(collection(db,"donatur"),snap=>{
 <p>📊 Saldo Bulan Ini: Rp <span id="saldoDonatur" class="total-saldo">0</span></p>
 <p>💰 Total Saldo: Rp <span id="totalSaldoDonaturMenu" class="total-saldo">0</span></p>
 <button onclick="shareWADonatur()">📤 Share WA</button>
+
+<button onclick="eksporPDF('donatur')">
+  📄 Ekspor PDF
+</button>
+
+<button onclick="eksporExcel('donatur')">
+  📊 Ekspor Excel
+</button>
+
+<button onclick="shareWADonatur()">
+  📤 Share WA
+</button>
+
 <button onclick="bukaMenu('beranda')">🏠 Kembali</button>
 </div>
 </div>

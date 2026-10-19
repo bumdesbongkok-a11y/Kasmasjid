@@ -364,6 +364,8 @@ function formatRupiah(nilai) {
 }
 
 // EKSPOR EXCEL
+
+
 window.eksporExcel = function(tipe) {
   if (!window.XLSX) {
     alert("Library Excel belum berhasil dimuat.");
@@ -372,44 +374,128 @@ window.eksporExcel = function(tipe) {
 
   const r = ambilDataLaporan(tipe);
 
-  const baris = r.transaksi.map((d, i) => ({
-    No: i + 1,
-    Tanggal: d.tanggal,
-    Hari: d.hari || "",
-    Jenis: d.jenis,
-    Keterangan: d.keterangan || "",
-    Jumlah: Number(d.jumlah || 0)
-  }));
+  // ========================================
+  // JUDUL DAN PERIODE LAPORAN
+  // ========================================
+  const periode = String(r.bulan || "");
+  const tahun = periode.split("-")[0];
 
-  baris.push({});
-  baris.push({
-    Keterangan: "Saldo Bulan Sebelumnya",
-    Jumlah: r.saldoSebelumnya
-  });
-  baris.push({
-    Keterangan: "Total Pemasukan",
-    Jumlah: r.masuk
-  });
-  baris.push({
-    Keterangan: "Total Pengeluaran",
-    Jumlah: r.keluar
-  });
-  baris.push({
-    Keterangan: "Saldo Akhir",
-    Jumlah: r.saldoAkhir
+  const baris = [
+    ["LAPORAN KEUANGAN"],
+    ["MASJID BAITURRAHMAN"],
+    ["Periode: " + namaBulan(r.bulan) + " " + tahun],
+    [],
+    [
+      "No",
+      "Tanggal",
+      "Hari",
+      "Keterangan",
+      "Pemasukan",
+      "Pengeluaran",
+      "Saldo Berjalan"
+    ]
+  ];
+
+  // ========================================
+  // DATA TRANSAKSI DAN SALDO BERJALAN
+  // ========================================
+  let saldoBerjalan = Number(r.saldoSebelumnya || 0);
+
+  r.transaksi.forEach((d, i) => {
+    const jumlah = Number(d.jumlah || 0);
+
+    const pemasukan =
+      d.jenis === "Pemasukan" ? jumlah : null;
+
+    const pengeluaran =
+      d.jenis === "Pengeluaran" ? jumlah : null;
+
+    // Hitung saldo setelah transaksi
+    if (d.jenis === "Pemasukan") {
+      saldoBerjalan += jumlah;
+    } else if (d.jenis === "Pengeluaran") {
+      saldoBerjalan -= jumlah;
+    }
+
+    baris.push([
+      i + 1,
+      d.tanggal,
+      d.hari || "",
+      d.keterangan || "",
+      pemasukan,
+      pengeluaran,
+      saldoBerjalan
+    ]);
   });
 
-  const ws = XLSX.utils.json_to_sheet(baris);
+  // ========================================
+  // RINGKASAN KEUANGAN
+  // ========================================
+  baris.push([]);
+
+  baris.push([
+    "", "", "", "Saldo Bulan Sebelumnya",
+    null, null, Number(r.saldoSebelumnya || 0)
+  ]);
+
+  baris.push([
+    "", "", "", "Total Pemasukan",
+    Number(r.masuk || 0), null, null
+  ]);
+
+  baris.push([
+    "", "", "", "Total Pengeluaran",
+    null, Number(r.keluar || 0), null
+  ]);
+
+  baris.push([
+    "", "", "", "Saldo Akhir",
+    null, null, Number(r.saldoAkhir || 0)
+  ]);
+
+  // ========================================
+  // MEMBUAT WORKSHEET EXCEL
+  // ========================================
+  const ws = XLSX.utils.aoa_to_sheet(baris);
+
+  // Lebar kolom
   ws["!cols"] = [
     { wch: 6 },
     { wch: 14 },
     { wch: 12 },
-    { wch: 16 },
-    { wch: 32 },
-    { wch: 20 }
+    { wch: 35 },
+    { wch: 20 },
+    { wch: 20 },
+    { wch: 22 }
   ];
 
+  // ========================================
+  // FORMAT ANGKA MENJADI RUPIAH
+  // ========================================
+  for (let row = 6; row <= baris.length; row++) {
+    ["E", "F", "G"].forEach(col => {
+      const cell = ws[col + row];
+
+      if (cell && typeof cell.v === "number") {
+        cell.z = '"Rp" #,##0;[Red]\\("Rp" #,##0);-';
+      }
+    });
+  }
+
+  // ========================================
+  // GABUNGKAN BARIS JUDUL
+  // ========================================
+  ws["!merges"] = [
+    { s: { r: 0, c: 0 }, e: { r: 0, c: 6 } },
+    { s: { r: 1, c: 0 }, e: { r: 1, c: 6 } },
+    { s: { r: 2, c: 0 }, e: { r: 2, c: 6 } }
+  ];
+
+  // ========================================
+  // EKSPOR FILE EXCEL
+  // ========================================
   const wb = XLSX.utils.book_new();
+
   XLSX.utils.book_append_sheet(wb, ws, "Laporan");
 
   XLSX.writeFile(
@@ -418,73 +504,150 @@ window.eksporExcel = function(tipe) {
   );
 };
 
+
+
 // EKSPOR PDF
+
 window.eksporPDF = function(tipe) {
-  if (!window.jspdf || !window.jspdf.jsPDF) {
+  if (
+    !window.jspdf ||
+    !window.jspdf.jsPDF
+  ) {
     alert("Library PDF belum berhasil dimuat.");
     return;
   }
 
+  if (typeof pdfAutoTableTidakAda === "function") {
+    // Tidak digunakan; kompatibilitas kode lama.
+  }
+
   const r = ambilDataLaporan(tipe);
   const { jsPDF } = window.jspdf;
-  const pdf = new jsPDF();
-
-  pdf.setFontSize(15);
-  pdf.text("MASJID BAITURRAHMAN", 14, 16);
-
-  pdf.setFontSize(11);
-  pdf.text(r.nama, 14, 24);
-  pdf.text("Periode: " + r.bulan, 14, 31);
-
-  const baris = r.transaksi.map((d, i) => [
-    i + 1,
-    d.tanggal,
-    d.hari || "-",
-    d.jenis,
-    d.keterangan || "-",
-    formatRupiah(d.jumlah)
-  ]);
-
-  pdf.autoTable({
-    startY: 38,
-    head: [[
-      "No", "Tanggal", "Hari",
-      "Jenis", "Keterangan", "Jumlah"
-    ]],
-    body: baris,
-    styles: { fontSize: 8 },
-    headStyles: { fillColor: [46, 125, 50] }
+  const pdf = new jsPDF({
+    orientation: "landscape",
+    unit: "mm",
+    format: "a4"
   });
 
+  // JUDUL LAPORAN
+  pdf.setFontSize(16);
+  pdf.text("MASJID BAITURRAHMAN", 14, 15);
+
+  pdf.setFontSize(12);
+  pdf.text(r.nama, 14, 23);
+
+  pdf.setFontSize(10);
+  pdf.text(
+    "Periode: " + namaBulan(r.bulan),
+    14,
+    30
+  );
+
+  // DATA TRANSAKSI
+  const baris = r.transaksi.map((d, i) => {
+    const jumlah = Number(d.jumlah || 0);
+
+    return [
+      i + 1,
+      d.tanggal,
+      d.hari || "-",
+      d.keterangan || "-",
+      d.jenis === "Pemasukan"
+        ? formatRupiah(jumlah)
+        : "-",
+      d.jenis === "Pengeluaran"
+        ? formatRupiah(jumlah)
+        : "-"
+    ];
+  });
+
+  // TABEL TRANSAKSI
+  pdf.autoTable({
+    startY: 36,
+    head: [[
+      "No",
+      "Tanggal",
+      "Hari",
+      "Keterangan",
+      "Pemasukan",
+      "Pengeluaran"
+    ]],
+    body: baris,
+    theme: "grid",
+    styles: {
+      fontSize: 9,
+      cellPadding: 3
+    },
+    headStyles: {
+      fillColor: [46, 125, 50],
+      textColor: 255,
+      halign: "center"
+    },
+    columnStyles: {
+      0: { cellWidth: 12, halign: "center" },
+      1: { cellWidth: 27 },
+      2: { cellWidth: 23 },
+      3: { cellWidth: 95 },
+      4: { cellWidth: 40, halign: "right" },
+      5: { cellWidth: 40, halign: "right" }
+    },
+    didDrawPage: function() {
+      // Nomor halaman
+      pdf.setFontSize(8);
+      pdf.text(
+        "Laporan Kas Masjid Baiturrahman",
+        14,
+        pdf.internal.pageSize.height - 8
+      );
+    }
+  });
+
+  // RINGKASAN SALDO
   let y = pdf.lastAutoTable.finalY + 10;
 
-  if (y > 250) {
+  if (y + 35 > pdf.internal.pageSize.height - 10) {
     pdf.addPage();
     y = 20;
   }
 
   pdf.setFontSize(10);
+
   pdf.text(
     "Saldo Bulan Sebelumnya: " +
-      formatRupiah(r.saldoSebelumnya), 14, y
+      formatRupiah(r.saldoSebelumnya),
+    14,
+    y
   );
+
   pdf.text(
-    "Total Pemasukan: " + formatRupiah(r.masuk),
-    14, y + 7
+    "Total Pemasukan: " +
+      formatRupiah(r.masuk),
+    14,
+    y + 7
   );
+
   pdf.text(
-    "Total Pengeluaran: " + formatRupiah(r.keluar),
-    14, y + 14
+    "Total Pengeluaran: " +
+      formatRupiah(r.keluar),
+    14,
+    y + 14
   );
 
   pdf.setFontSize(12);
+  pdf.setFont(undefined, "bold");
+
   pdf.text(
-    "Saldo Akhir: " + formatRupiah(r.saldoAkhir),
-    14, y + 24
+    "Saldo Akhir: " +
+      formatRupiah(r.saldoAkhir),
+    14,
+    y + 24
   );
 
-  pdf.save(`Laporan_${tipe}_${r.bulan}.pdf`);
+  pdf.save(
+    `Laporan_${tipe}_${r.bulan}.pdf`
+  );
 };
+
 
 
 // ===== FIREBASE =====
@@ -572,10 +735,6 @@ onSnapshot(collection(db,"donatur"),snap=>{
   📊 Ekspor Excel
 </button>
 
-<button onclick="shareWAInfaq()">
-  📤 Share WA
-</button>
-
 <button onclick="bukaMenu('beranda')">🏠 Kembali</button>
 </div>
 </div>
@@ -617,9 +776,6 @@ onSnapshot(collection(db,"donatur"),snap=>{
   📊 Ekspor Excel
 </button>
 
-<button onclick="shareWADonatur()">
-  📤 Share WA
-</button>
 
 <button onclick="bukaMenu('beranda')">🏠 Kembali</button>
 </div>
